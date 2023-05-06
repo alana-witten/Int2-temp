@@ -57,24 +57,23 @@ def rotate(image):
 def imageAug(image, label):
   image = tf.cast(image, tf.float32)
   
-  image = rotate(image)
 
   #resizes image
   image = tf.image.resize(image, (128, 128))
-  image = tf.cast(image, tf.uint8)
+  image = rotate(image)
 
   return image, label
 
 #train and valid are now (32 * 500 * 500 * 3) tensors
 #that is 32 seperate 500 * 500 images in one. (3 represents the RGB values)
-# flowers_train = flowers_train_raw.map(imageAug).batch(32)
-# flowers_valid = flowers_valid_raw.map(imageAug).batch(32)
+flowers_train = flowers_train_raw.map(imageAug).batch(32)
+flowers_valid = flowers_valid_raw.map(imageAug).batch(32)
 flowers_test = flowers_test_raw.map(imageAug)
 
-flowers_train_raw_augmented = flowers_train_raw.map(imageAug)
-flowers_train = flowers_train_raw.concatenate(flowers_train_raw_augmented).batch(32)
-flowers_valid_raw_augmented = flowers_valid_raw.map(imageAug)
-flowers_valid = flowers_valid_raw.concatenate(flowers_valid_raw_augmented).batch(32)
+# flowers_train_raw_augmented = flowers_train_raw.map(imageAug)
+# flowers_train = flowers_train_raw.concatenate(flowers_train_raw_augmented).batch(32)
+# flowers_valid_raw_augmented = flowers_valid_raw.map(imageAug)
+# flowers_valid = flowers_valid_raw.concatenate(flowers_valid_raw_augmented).batch(32)
 
 
 # flowers_info.features['label']
