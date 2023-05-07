@@ -14,7 +14,7 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import pathlib
 import tensorflow_addons as tfa
-
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -26,6 +26,54 @@ flowers, flowers_info = tfds.load('oxford_flowers102', as_supervised = True, wit
 flowers_train_raw, flowers_valid_raw, flowers_test_raw = flowers['train'], flowers['validation'], flowers['test']
 
 print(flowers_train_raw)
+
+shape = (500, 500, 3)
+small_shape = (128, 128, 3)
+
+AT = tf.data.experimental.AUTOTUNE
+
+
+batch_size = 32
+height = 500
+width = 500
+
+def normalize(img, label):
+    img = tf.image.resize(img,shape[:2])
+    img = tf.cast(img, tf.float32) / 255
+    return (img, label)
+
+def resize(img, label):
+    img = tf.image.resize(img,small_shape[:2])
+    return (img, label)
+
+def rotate(image, label):
+    angle = tf.random.uniform([], minval=-30, maxval=30, dtype=tf.float32)
+    image = tfa.image.rotate(image, angle)
+    return image, label
+
+flowers_train_raw_original = flowers_train_raw
+flowers_train_aug = flowers_train_raw_original.map(rotate, num_parallel_calls=AT)
+flowers_train_raw = flowers_train_raw.concatenate(flowers_train_aug)
+
+
+flowers_train_raw = flowers_train_raw.map(normalize, num_parallel_calls=AT)
+
+flowers_train_raw = flowers_train_raw.map(resize, num_parallel_calls=AT)
+flowers_train_raw = flowers_train_raw.cache()
+flowers_train_raw = flowers_train_raw.batch(batch_size)
+flowers_train_raw = flowers_train_raw.prefetch(AT)
+
+flowers_valid_raw = flowers_valid_raw.map(normalize, num_parallel_calls=AT)
+flowers_valid_raw = flowers_valid_raw.map(resize, num_parallel_calls=AT)
+flowers_valid_raw = flowers_valid_raw.cache()
+flowers_valid_raw = flowers_valid_raw.shuffle(1000)
+flowers_valid_raw = flowers_valid_raw.batch(batch_size)
+flowers_valid_raw = flowers_valid_raw.prefetch(AT)
+
+flowers_test_raw = flowers_test_raw.map(normalize, num_parallel_calls=AT)
+flowers_test_raw = flowers_test_raw.map(resize, num_parallel_calls=AT)
+flowers_test_raw = flowers_test_raw.batch(batch_size)
+flowers_test_raw = flowers_test_raw.prefetch(AT)
 
 #Uses for manual testing, can be deleted later.
 #prints out a untouched image and a augmented one
@@ -47,27 +95,31 @@ training_length = len(flowers_train_raw)
 validation_length = len(flowers_valid_raw)
 test_length = len(flowers_test_raw)
 
-def rotate(image):
-    angle = tf.random.uniform([], minval=-30, maxval=30, dtype=tf.float32)
-    image = tfa.image.rotate(image, angle)
-    
-    return image
+
 
 #testing out image resizing and rescaling
-def imageAug(image, label):
-  image = tf.cast(image, tf.float32)
+# def imageAug(image, label):
+#   image = tf.cast(image, tf.float32)
   
-  # image = tf.zeros(shape=(128, 128, 3), dtype=tf.float32) #make completely black image
-  #resizes image
-  image = tf.image.resize(image, (128, 128))
-#   image = rotate(image)
-  return image, label
+#   # image = tf.zeros(shape=(128, 128, 3), dtype=tf.float32) #make completely black image
+#   #resizes image
+#   image = tf.image.resize(image, (128, 128))
+# #   image = rotate(image)
+#   return image, label
 
 #train and valid are now (32 * 500 * 500 * 3) tensors
 #that is 32 seperate 500 * 500 images in one. (3 represents the RGB values)
-flowers_train = (flowers_train_raw.map(imageAug).batch(32))
-flowers_valid = flowers_valid_raw.map(imageAug).batch(32)
-flowers_test = flowers_test_raw.map(imageAug)
+# flowers_train = (flowers_train_raw.map(imageAug).batch(32))
+# flowers_valid = flowers_valid_raw.map(imageAug).batch(32)
+# flowers_test = flowers_test_raw.map(imageAug)
+
+
+
+test_datagen = ImageDataGenerator( rescale = 1.0/255. )
+
+
+# flowers_train = train_datagen.flow(flowers_train_raw, batch_size = 32)
+
 
 # flowers_train_raw_augmented = flowers_train_raw.map(imageAug)
 # flowers_train = flowers_train_raw.concatenate(flowers_train_raw_augmented).batch(32)
@@ -85,9 +137,7 @@ flowers_test = flowers_test_raw.map(imageAug)
 image_count = training_length + validation_length + test_length
 
 #define params for the loader
-batch_size = 32
-height = 500
-width = 500
+
 
 class_names = flowers_info.features['label']
 print(class_names.names)
@@ -98,6 +148,8 @@ model = Sequential()
 #rescaling layer, can do this before
 
 (layers.Rescaling(1./255, input_shape=(height, width, 3)))
+
+
 
 
 
@@ -139,7 +191,7 @@ model.compile(optimizer = 'adam',
 
 #train the model
 epochs = 5
-history = model.fit(flowers_train, validation_data=flowers_valid, epochs=epochs)
+history = model.fit(flowers_train_raw, validation_data=flowers_valid_raw, epochs=epochs)
 
 model.summary()
 
@@ -153,6 +205,12 @@ loss = history.history['loss']
 val_loss = history.history['val_loss']
 
 epochs_range = range(epochs)
+
+test_loss, test_accuracy = model.evaluate(flowers_test_raw, verbose=2)
+
+print("test loss is: ", test_loss)
+print("test accuracy is:", test_accuracy)
+
 
 plt.figure(figsize=(8, 8))
 plt.subplot(1, 2, 1)
